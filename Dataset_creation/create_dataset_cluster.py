@@ -126,6 +126,161 @@ def _coverage(expected: str, candidate: str) -> float:
     return 1.0 if (exp in cand or cand in exp) else 0.0
 
 
+# ─── EasyOCR singleton ────────────────────────────────────────────────────────
+
+_ocr_reader: Optional[easyocr.Reader] = None
+
+
+def get_ocr_reader(gpu: bool = True) -> easyocr.Reader:
+    """Initialise EasyOCR once and reuse for the whole run."""
+    global _ocr_reader
+    if _ocr_reader is None:
+        print(f"[OCR] Initialising EasyOCR (gpu={gpu}) …", flush=True)
+        _ocr_reader = easyocr.Reader(["en"], gpu=gpu)
+        print("[OCR] EasyOCR ready.", flush=True)
+    return _ocr_reader
+
+
+def _ocr_detections(image: Image.Image) -> List[Dict]:
+    """
+    Run EasyOCR and return a list of detection dicts:
+      { text, conf, x1, y1, x2, y2, cy }
+    Only detections with conf >= MIN_OCR_CONF are kept.
+    """
+    reader  = get_ocr_reader()
+    arr     = np.array(image.convert("RGB"))
+    results = reader.readtext(arr, detail=1, paragraph=False)
+    dets = []
+    for (pts, text, conf) in results:
+        text = text.strip()
+        if not text or float(conf) < MIN_OCR_CONF:
+            continue
+        xs = [p[0] for p in pts]
+        ys = [p[1] for p in pts]
+        dets.append({
+            "text": text,
+            "conf": float(conf),
+            "x1": min(xs), "y1": min(ys),
+            "x2": max(xs), "y2": max(ys),
+            "cy": (min(ys) + max(ys)) / 2.0,
+        })
+    return dets
+
+
+# ─── OCR verification & reconstruction ───────────────────────────────────────
+
+def verify_text_with_ocr(
+    image: Image.Image,
+    expected_text: str,
+    bbox: Optional[List[int]] = None,
+) -> Tuple[Optional[str], float]:
+    """
+    Check that `expected_text` is actually readable in the image.
+
+    Tries the cropped bbox region first (more focused), then the full image.
+    A detection is accepted when its Levenshtein coverage >= MIN_OCR_COVERAGE
+    or it is a substring of / contains the expected text.
+
+    Returns (best_token, confidence_0_to_100) or (None, 0.0).
+    """
+    img    = image.convert("RGB")
+    iw, ih = img.size
+
+    # Build sources: tight crop first, full image as fallback
+    sources: List[Image.Image] = []
+    if bbox is not None:
+        x, y, w, h = [int(v) for v in bbox]
+        pad  = max(8, int(h * 0.20))
+        crop = img.crop((max(0, x - pad), max(0, y - pad),
+                         min(iw, x + w + pad), min(ih, y + h + pad)))
+        sources.append(crop)
+    sources.append(img)
+
+    exp_lower = expected_text.lower()
+
+    for src in sources:
+        try:
+            dets = _ocr_detections(src)
+        except Exception as e:
+            print(f"[OCR] error in verify: {e}", flush=True)
+            continue
+
+        scored: List[Tuple[str, float]] = []
+        for d in dets:
+            cov       = _coverage(expected_text, d["text"])
+            tok_lower = d["text"].lower()
+            if (cov >= MIN_OCR_COVERAGE
+                    or tok_lower in exp_lower
+                    or exp_lower in tok_lower):
+                blended = (d["conf"] + cov) / 2.0
+                scored.append((d["text"], blended))
+
+        if scored:
+            scored.sort(key=lambda x: x[1], reverse=True)
+            tok, conf = scored[0]
+            return tok, round(conf * 100, 2)
+
+    return None, 0.0
+
+
+def reconstruct_phrase_with_easyocr(
+    image: Image.Image,
+    anchor_bbox: Optional[List[int]] = None,
+) -> Tuple[Optional[str], float]:
+    """
+    Reconstruct the most likely complete text phrase visible near `anchor_bbox`.
+
+    EasyOCR bounding boxes allow spatial filtering: we keep only detections
+    that vertically overlap the anchor region, then join them left-to-right.
+
+    Returns (phrase, avg_confidence_0_to_100) or (None, 0.0).
+    """
+    img  = image.convert("RGB")
+    try:
+        dets = _ocr_detections(img)
+    except Exception as e:
+        print(f"[OCR] error in reconstruct: {e}", flush=True)
+        return None, 0.0
+
+    if not dets:
+        return None, 0.0
+
+    # ── Filter to detections near the anchor bbox ─────────────────────────────
+    if anchor_bbox is not None:
+        ax, ay, aw, ah = [int(v) for v in anchor_bbox]
+        anchor_y1 = ay
+        anchor_y2 = ay + ah
+        anchor_cy = ay + ah / 2.0
+
+        avg_h     = max(1.0, float(np.mean([d["y2"] - d["y1"] for d in dets])))
+        tolerance = avg_h * 1.2
+
+        nearby = [
+            d for d in dets
+            if d["y1"] <= anchor_y2 + tolerance and d["y2"] >= anchor_y1 - tolerance
+        ]
+        if not nearby:
+            nearby = [min(dets, key=lambda d: abs(d["cy"] - anchor_cy))]
+    else:
+        nearby = dets
+
+    # ── Sort top-to-bottom, left-to-right and join ────────────────────────────
+    nearby.sort(key=lambda d: (round(d["cy"] / 20) * 20, d["x1"]))
+    phrase   = " ".join(d["text"] for d in nearby).strip()
+    avg_conf = float(np.mean([d["conf"] for d in nearby]))
+
+    # ── Validate length and content ───────────────────────────────────────────
+    words = phrase.split()
+    if len(words) > MAX_PHRASE_WORDS:
+        phrase = " ".join(words[:MAX_PHRASE_WORDS])
+    if len(phrase) > MAX_PHRASE_CHARS:
+        return None, 0.0
+    if not re.search(r"[A-Za-z]", phrase):
+        return None, 0.0
+    if re.search(r"[^\x00-\x7F]", phrase):
+        return None, 0.0
+
+    return phrase, round(avg_conf * 100, 2)
 
 
 # ─── BLIP-2 Caption + Prompt Generator ───────────────────────────────────────
