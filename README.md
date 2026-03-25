@@ -61,8 +61,8 @@ This directory contains the necessary project structure, dependencies, and confi
 
 ## 3. Efficient Inference (`Efficient inference/`)
 
-![VRAM Benchmark FP16](./Efficient_Inference/figures/benchmark/fig_vram_fp16.png)
-![Quality Report](./Efficient_inference/figures/qualitative/quality_report.png)
+![VRAM Benchmark FP16](./Efficient%20Inference/figures/benchmark/fig_vram_fp16.png)
+![Quality Report](./Efficient%20Inference/figures/qualitative/quality_report.png)
 
 Running high-fidelity generative models often requires massive compute. This module is dedicated to benchmarking and running FLUX.2 variants under strict hardware constraints.
 
