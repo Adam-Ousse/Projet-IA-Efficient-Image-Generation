@@ -84,6 +84,26 @@ This grid provides a qualitative comparison of generation outputs across differe
 
 </details>
 
+<details>
+<summary><strong>👉 Click to view Model Distillation Comparison (dev vs 9B vs 4B)</strong></summary>
+
+<br>
+This grid compares the visual and text-rendering quality across different FLUX.2 model sizes at FP16 precision:
+
+![Model Distillation Comparison](./Efficient%20Inference/figures/qualitative/grid_distill_6cols.jpg)
+
+</details>
+
+<details>
+<summary><strong>👉 Click to view Quantization Matrix Comparison</strong></summary>
+
+<br>
+This matrix illustrates the visual impact of applying varying levels of quantization to both the Text Encoder (Y-axis) and the FLUX model backbone (X-axis):
+
+![Quantization Matrix](./Efficient%20Inference/figures/qualitative/grid_flux_vs_text_rows_fixed.jpg)
+
+</details>
+
 *Check the `README.md` inside the `Efficient inference/` folder for benchmarking commands and evaluation protocols.*
 
 ---
