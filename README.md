@@ -87,10 +87,10 @@ Running high-fidelity generative models often requires massive compute. This mod
 * **Evaluation & OCR Quality**: Automated scripts to evaluate the generated images for overall visual quality and text rendering accuracy (OCR metrics).
 
 ## Hardware monitoring pipeline
-![Hardware benchmark overview](figures/hardware_benchmark_overview.png)
+![Hardware benchmark overview](./Efficient%20Inference/figures/hardware_benchmark_overview.png)
 
 ### OCR and evaluation pipeline
-![OCR benchmark overview](figures/model_benchmark_ocr_overview.png)
+![OCR benchmark overview](./Efficient%20Inference/figures/model_benchmark_ocr_overview.png)
 
 ### Visual Evaluation
 
