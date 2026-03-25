@@ -20,3 +20,4 @@ easyocr>=1.7.0
 python-Levenshtein
 scikit-image
 scipy
+optimum-quanto

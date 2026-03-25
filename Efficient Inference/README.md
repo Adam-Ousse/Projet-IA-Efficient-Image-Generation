@@ -137,6 +137,24 @@ Example SSIM/FID/CLIP run:
 python evaluate_ssim_clip_fid.py
 ```
 
+### 5) INT8 Quantization with Optimum-Quanto
+
+Main script: `quant_fp2_klein.py`
+
+This script provides a focused benchmarking path for the `FLUX.2-klein-4B` model, comparing the FP16 baseline against an INT8 quantized variant using Hugging Face's `optimum-quanto`. To avoid out-of-memory (OOM) errors on constrained hardware, the script applies `qint8` quantization and freezes the weights directly on the CPU RAM before moving the model to the GPU. 
+
+It evaluates text-heavy prompts and outputs a comparative graph of:
+- Peak VRAM usage
+- System RAM usage
+- Inference Latency
+- Image Quality (CLIP Score)
+
+Example run:
+
+```bash
+python quant_fp2_klein.py
+```
+
 ## Benchmark Overview Figures
 
 ### Hardware monitoring pipeline
