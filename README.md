@@ -80,7 +80,7 @@ Running high-fidelity generative models often requires massive compute. This mod
 <br>
 This grid provides a qualitative comparison of generation outputs across different configurations:
 
-![Generation Comparison](./Efficient_Inference/figures/qualitative/comparison_grid.png)
+![Generation Comparison](./Efficient%20Inference/figures/qualitative/comparison_grid.png)
 
 </details>
 
