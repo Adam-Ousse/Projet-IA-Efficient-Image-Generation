@@ -1,0 +1,183 @@
+import torch
+import time
+import numpy as np
+from pathlib import Path
+from torchvision import transforms
+from transformers import CLIPProcessor, CLIPModel
+from contextlib import nullcontext
+
+
+def evaluate_on_test_set(pipe, tracker, test_dataloader, experiment_name, use_autocast=False, fid_reference_images=None):
+
+    print("\n" + "="*70)
+    print("TEST SET EVALUATION")
+    print("="*70)
+
+    output_dir = Path("results/generated_images") / experiment_name / "test"
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    all_real_images = []
+    all_prompts = []
+    all_texts = []
+
+    for batch in test_dataloader:
+        all_prompts.extend(batch["prompt"])
+        all_texts.extend(batch["text"])
+        for img_tensor in batch["image"]:
+            pil = transforms.ToPILImage()(img_tensor * 0.5 + 0.5)
+            all_real_images.append(pil)
+
+    print(f"Test set: {len(all_prompts)} samples")
+    if use_autocast:
+        print("  [INFO] bfloat16 autocast enabled for inference (QLoRA mode)")
+
+    FID_IMAGES_PER_PROMPT = 3
+
+    print(f"\n[1/4] Generating images ({FID_IMAGES_PER_PROMPT} per prompt for FID, 1 for CLIP/OCR)...")
+    generated_images_primary = []   # k=0 only - saved to disk, used for CLIP/OCR
+    generated_images_all = []       # all k - used for FID
+    inference_times = []
+
+    inference_ctx = torch.autocast("cuda", dtype=torch.bfloat16) if use_autocast else nullcontext()
+
+    for i, prompt in enumerate(all_prompts):
+        for k in range(FID_IMAGES_PER_PROMPT):
+            seed = (2024 + k * 1000) + i
+            torch.manual_seed(seed)
+            torch.cuda.manual_seed(seed)
+            np.random.seed(seed)
+            torch.cuda.empty_cache()
+            t0 = time.time()
+            with torch.no_grad():
+                with inference_ctx:
+                    image = pipe(
+                        prompt=prompt,
+                        num_inference_steps=20,
+                        guidance_scale=4.0,
+                        height=512,
+                        width=512,
+                        max_sequence_length=512,
+                        text_encoder_out_layers=(9, 18, 27)
+                    ).images[0]
+            elapsed = time.time() - t0
+            generated_images_all.append(image)
+
+            if k == 0:
+                inference_times.append(elapsed)
+                safe_name = prompt[:40].replace(" ", "_").replace("/", "_")
+                image.save(output_dir / f"{i:03d}_{safe_name}.png")
+                generated_images_primary.append(image)
+
+        print(f"  [{i+1}/{len(all_prompts)}] done ({inference_times[-1]:.2f}s)")
+
+    generated_images = generated_images_primary  # alias for CLIP/OCR below
+
+    print(f"\n[2/4] Computing FID (pool: {len(generated_images_all)} generated)...")
+    if fid_reference_images is not None:
+        print(f"  [INFO] Reference: full fine-tune pool ({len(fid_reference_images)} images).")
+        fid_score = tracker.compute_fid(fid_reference_images, generated_images_all)
+    else:
+        print("  [INFO] Reference: real test images (baseline mode).")
+        fid_score = tracker.compute_fid(all_real_images, generated_images_all)
+    print(f"  FID: {fid_score:.2f}  (lower is better)")
+
+    # CLIP
+    print("\n[3/4] Computing CLIP score...")
+    clip_model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32").to("cuda")
+    clip_processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
+    clip_score = tracker.compute_clip_score(generated_images, all_prompts, clip_model, clip_processor)
+    print(f"  CLIP score: {clip_score:.4f}  (higher is better)")
+    del clip_model, clip_processor
+    torch.cuda.empty_cache()
+
+    # OCR - returns dict {ocr_exact_match, ocr_word_accuracy}
+    print("\n[4/4] Computing OCR accuracy...")
+    ocr_results = tracker.compute_ocr_accuracy(generated_images, all_texts)
+
+    inference_stats = {
+        "avg_latency_s": round(float(np.mean(inference_times)), 3),
+        "std_latency_s": round(float(np.std(inference_times)), 3),
+        "min_latency_s": round(float(np.min(inference_times)), 3),
+        "max_latency_s": round(float(np.max(inference_times)), 3),
+        "throughput_img_per_s": round(1.0 / np.mean(inference_times), 3)
+    }
+
+    tracker.record_test_metrics(
+        fid=fid_score,
+        clip_score=clip_score,
+        ocr_results=ocr_results,
+        inference_stats=inference_stats
+    )
+
+    em = ocr_results.get("ocr_exact_match", "skipped") if isinstance(ocr_results, dict) else "skipped"
+    wa = ocr_results.get("ocr_word_accuracy", "skipped") if isinstance(ocr_results, dict) else "skipped"
+
+    print("\n" + "="*70)
+    print("TEST EVALUATION COMPLETE")
+    print("="*70)
+    print(f"  FID:               {fid_score:.2f}")
+    print(f"  CLIP score:        {clip_score:.4f}")
+    print(f"  OCR exact match:   {em}")
+    print(f"  OCR word accuracy: {wa}")
+    print(f"  Avg latency:       {inference_stats['avg_latency_s']}s")
+    print(f"  Images saved to:   {output_dir}/")
+
+    return {"fid": fid_score, "clip_score": clip_score,
+            "ocr_exact_match": em, "ocr_word_accuracy": wa,
+            "inference_stats": inference_stats}
+
+
+def compute_val_loss(pipe, model, val_dataloader, dtype):
+    model.eval()
+    total_loss = 0
+
+    with torch.no_grad():
+        for batch in val_dataloader:
+            images = batch["image"].to("cuda", dtype=dtype)
+            prompts = batch["prompt"]
+
+            with torch.amp.autocast("cuda", dtype=dtype):
+                image_latents = pipe.vae.encode(images).latent_dist.sample()
+                image_latents = pipe._patchify_latents(image_latents)
+                latents_bn_mean = pipe.vae.bn.running_mean.view(1, -1, 1, 1).to(image_latents.device, image_latents.dtype)
+                latents_bn_std = torch.sqrt(pipe.vae.bn.running_var.view(1, -1, 1, 1) + pipe.vae.config.batch_norm_eps)
+                latents = (image_latents - latents_bn_mean) / latents_bn_std
+                del image_latents
+
+                noise = torch.randn_like(latents)
+                timesteps = torch.rand(latents.shape[0], device="cuda")
+                timesteps_expanded = timesteps.view(-1, 1, 1, 1)
+                noisy_latents = (1 - timesteps_expanded) * latents + timesteps_expanded * noise
+                target = noise - latents
+                del noise, timesteps_expanded
+
+                prompt_embeds, text_ids = pipe.encode_prompt(
+                    prompt=prompts, device="cuda", num_images_per_prompt=1,
+                    max_sequence_length=512, text_encoder_out_layers=(9, 18, 27)
+                )
+
+                noisy_latents_packed = pipe._pack_latents(noisy_latents)
+                latent_ids = pipe._prepare_latent_ids(noisy_latents).to("cuda")
+                del noisy_latents
+
+                velocity_pred = model(
+                    hidden_states=noisy_latents_packed,
+                    timestep=timesteps,
+                    guidance=None,
+                    encoder_hidden_states=prompt_embeds,
+                    txt_ids=text_ids,
+                    img_ids=latent_ids,
+                    return_dict=False
+                )[0]
+
+                velocity_pred_unpacked = pipe._unpack_latents_with_ids(velocity_pred, latent_ids)
+                target_packed = pipe._pack_latents(target)
+                target_unpacked = pipe._unpack_latents_with_ids(target_packed, latent_ids)
+                del velocity_pred, target_packed, noisy_latents_packed
+
+                loss = torch.nn.functional.mse_loss(velocity_pred_unpacked, target_unpacked)
+                total_loss += loss.item()
+                del loss, images, latents, target, velocity_pred_unpacked, target_unpacked
+
+    model.train()
+    return total_loss / len(val_dataloader)

@@ -205,3 +205,12 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+
+# LoRA Fine-tuning results and heavy data
+Efficient_Training/results/metrics/
+Efficient_Training/results/fid_reference/
+Efficient_Training/results/generated_images/
+Efficient_Training/jobs/logs/
+Efficient_Training/data/
+Efficient_Training/models/
