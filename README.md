@@ -13,6 +13,10 @@
 * Arturo Mendoza Quispe
 * Nacim Belkhir
 
+
+### Project Report
+- [View/download PDF report](https://drive.google.com/file/d/1ay4-cBOSt4LbLhwgQ0gBykda1Bu0HUXY/view?usp=drive_link)
+
 ---
 
 Welcome to the **Efficient Image Generation** project codebase. This project tackles the hardware and VRAM bottlenecks of modern Latent Diffusion Models by providing a "frugal" end-to-end pipeline for FLUX.2, using text rendering as our primary benchmark for precision.
