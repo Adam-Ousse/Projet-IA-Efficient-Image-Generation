@@ -1,210 +1,143 @@
-# Efficient Text Rendering via LoRA Fine-Tuning of Flux.2 Klein 4B
-
-Fine-tuning strategies for text-in-image generation on the Flux.2 Klein 4B model.
-Covers full fine-tuning, LoRA rank sweep, cross-attention LoRA, and QLoRA —
-with a custom dataset built from AnyWord-3M.
-
-Part of the **Efficient Image Generation with Text Rendering** project (ENSTA Paris, 2026).
-
-> Full experimental results and analysis are available in the project report.
+# Efficient Training : Fine Tuning Startegies Applied for Efficient Image Generation with Text Rendering
 
 ---
 
-## Project structure
+## Our Approach
 
-```
-text-in-image-generation/
-└── Finetune_with_LoRA/
-    ├── train_full_finetune.py        # Full fine-tuning (all transformer params)
-    ├── train_lora_rank_sweep.py      # LoRA rank sweep: r ∈ {8, 16, 32, 64}
-    ├── train_lora_cross_attention.py # CA-LoRA: to_k + to_v only, r ∈ {16, 32}
-    ├── train_qlora.py                # QLoRA: 4-bit NF4 backbone + LoRA adapters
-    ├── evaluate_all.py               # Full evaluation pipeline (FID, CLIP, OCR)
-    ├── analyze_ocr_by_length.py      # OCR breakdown by target text length
-    ├── generate_plots.py             # All result plots
-    ├── dataset_loader.py             # Dataset loading + preprocessing
-    ├── download_model.py             # Download Flux.2 Klein 4B from HuggingFace
-    ├── metrics_utils.py              # MetricsTracker: FID, CLIP, OCR, energy
-    ├── evaluation.py                 # evaluate_on_test_set + compute_val_loss
-    ├── requirements.txt
-    ├── src/
-    │   ├── evaluation/
-    │   │   └── fid.py                # InceptionV3-based FID implementation
-    │   └── monitoring/
-    │       ├── resource_monitor.py   # Background thread resource monitor
-    │       └── metrics.py            # ResourceMetrics + CSV export
-    ├── jobs/
-    │   ├── sh_files/                 # SLURM job scripts
-    │   └── logs/                     # Job stdout/stderr logs
-data/
-├── train.json                        # Training samples
-├── val.json                          # Validation samples
-├── test.json                         # Test samples
-└── test/images/                      # Test images
-models/
-├── flux2-klein-base-4b/              # Base model (downloaded)
-├── full_finetune/                    # Full fine-tune checkpoint
-├── lora_flux2klein/
-│   ├── rank_8/
-│   ├── rank_16/
-│   ├── rank_32/
-│   └── rank_64/
-├── lora_cross_attention/
-│   ├── rank_16/
-│   └── rank_32/
-└── qlora_cross_attention/
-results/
-├── metrics/                          # Per-experiment JSON files
-├── plots/                            # Generated figures
-├── generated_images/                 # Generated test images per experiment
-└── fid_reference/                    # FID reference images from full fine-tune
-```
+Instead of retraining the entire model, we explored **LoRA** (Low-Rank Adaptation) — a technique that adds tiny trainable "patches" on top of a frozen model instead of training all Transformer's parameters.
+
+We tested four strategies on the **Flux.2 Klein 4B** model:
+
+| Strategy | What it does | Trainable params |
+|---|---|---|
+| Full fine-tuning | Updates all 4 billion parameters | 100% |
+| LoRA rank sweep | Adds adapters to attention + feed-forward layers | ~0.5% |
+| **CA-LoRA** | Adds adapters only to cross-attention layers | **~0.04%** |
+| QLoRA | Same as CA-LoRA, but the model is also compressed to 4-bit | ~0.04% |
+
+We specifically focused on **cross-attention layers** — the part of the model that "reads" the text prompt and decides how to render it in the image. Our hypothesis: if text rendering fails, it's because the model isn't paying attention to the right parts of the prompt.
+
+![LoRA architecture variants](results/plots/lora_architecture.png)
 
 ---
 
-## Installation
+## The Dataset
 
-> **Important:** Flux.2 Klein requires the development version of diffusers.
-> The released PyPI version does not include `Flux2KleinPipeline`.
+We built a custom dataset of **1,000 images** sourced from AnyWord-3M,
+constructed using the pipeline in [`Dataset_creation/`](../Dataset_creation).
+It applies a strict 6-stage filter (OCR verification, image quality checks,
+automatic captioning). Each sample contains an image, the exact text visible
+in it, and a training prompt.
+
+Only ~5% of candidate images passed all filters — ensuring high quality over quantity.
+
+---
+
+## Main Finding: 
+
+**CA-LoRA with rank 16 is the best model** — not the most powerful one, but the most targeted one.
+
+![OCR comparison per experiment](results/plots/ocr_comparison.png)
+
+With only **4 MB of adapter weights** (versus 15 GB for full fine-tuning), CA-LoRA r=16 achieves:
+- The best **Exact Match** score: 0.30 (+20% vs full fine-tuning)
+- The best **Character Error Rate**: 0.40 (lower is better)
+
+> Throwing more parameters at the problem makes things **worse** — higher-rank LoRA adapters overfit to scene appearance and forget about the characters.
+
+---
+
+## The Storage Cost: 4000× Smaller
+
+![Adapter sizes](results/plots/adapter_sizes.png)
+
+All LoRA adapters fit between 4 and 30 MB. The full fine-tune checkpoint weighs **15 GB**. This means you can share, store, and swap fine-tuned behaviors for almost no cost.
+
+---
+
+## Where It Still Struggles
+
+![OCR performance by text length](results/plots/ocr_by_length_heatmap.png)
+
+All models — including ours — collapse on **3+ word targets**. Exact match drops to near zero when the text is longer than two words. This is the main open challenge: models can render individual words but fail to maintain consistency across a full phrase.
+
+---
+
+## How to Run It
+
+### Install
 
 ```bash
-# 1. Clone and enter the project
 git clone <repo_url>
-cd text-in-image-generation/Finetune_with_LoRA
+cd Projet-IA-Efficient-Image-Generation/Efficient_training
 
-# 2. Create a virtual environment
 python3 -m venv venv
 source venv/bin/activate
 
-# 3. Install diffusers from source (required for Flux.2 Klein support)
 pip install -U git+https://github.com/huggingface/diffusers.git
-
-# 4. Install remaining dependencies
 pip install -r requirements.txt
 ```
 
----
+> Flux.2 Klein requires the **development version** of `diffusers` — the PyPI release does not include `Flux2KleinPipeline`.
 
-## Quickstart
-
-### 1. Download the base model
+### Download the model
 
 ```bash
 export HF_TOKEN="your_huggingface_token"
 python download_model.py
 ```
 
-The model requires accepting the license on [HuggingFace](https://huggingface.co/black-forest-labs/FLUX.2-klein-base-4B) before downloading.
-The model is saved to `models/flux2-klein-base-4b/` (~8 GB).
+Accept the license on [HuggingFace](https://huggingface.co/black-forest-labs/FLUX.2-klein-base-4B) first (~8 GB download).
 
-### 2. Prepare the dataset
-
-Place your dataset under `data/` with the following structure:
-
-```
-data/
-├── train.json
-├── val.json
-├── test.json
-├── train/images/
-├── val/images/
-└── test/images/
-```
-
-Each JSON file contains records with fields: `filepath`, `prompt`, `text`.
-
-### 3. Train
+### Train
 
 ```bash
-# Full fine-tuning (15 epochs, early stopping patience=4)
-python train_full_finetune.py
-
-# LoRA rank sweep (r=8, 16, 32, 64 — 15 epochs each, early stopping patience=4)
-python train_lora_rank_sweep.py
-
-# Cross-attention LoRA (r=16 and r=32 — 20 epochs each, early stopping patience=5)
-python train_lora_cross_attention.py
-
-# QLoRA (4-bit NF4 + LoRA — 20 epochs, early stopping patience=5)
-python train_qlora.py
+python train_lora_cross_attention.py   # recommended: CA-LoRA r=16
+python train_lora_rank_sweep.py        # LoRA r=8, 16, 32, 64
+python train_qlora.py                  # QLoRA (lowest VRAM)
+python train_full_finetune.py          # full fine-tuning (upper bound)
 ```
 
-All scripts save the **best checkpoint** (lowest validation loss) automatically and
-stop early if validation loss does not improve for the configured patience.
-Metrics, loss curves, and resource usage are saved to `results/metrics/`.
-
-### 4. Evaluate
+### Evaluate and plot
 
 ```bash
-python evaluate_all.py
+python evaluate_all.py          # FID, CLIP, OCR metrics on test set
+python analyze_ocr_by_length.py # OCR breakdown by word count (no GPU needed)
+python generate_plots.py        # all result figures
 ```
 
-Builds the FID reference from the full fine-tune model first, then evaluates all
-experiments against the same reference distribution for a fair comparison.
-Generated images are saved to `results/generated_images/`.
-
-### 5. Analyze OCR by text length
+### On a SLURM cluster
 
 ```bash
-python analyze_ocr_by_length.py
+sbatch jobs/sh_files/job_lora_cross_attention.sh
+sbatch jobs/sh_files/job_evaluate_all.sh
 ```
-
-Breakdown of OCR scores by word count (1-word / 2-word / 3+-word targets).
-Runs on already-generated images — no GPU required.
-
-### 6. Generate plots
-
-```bash
-python generate_plots.py
-```
-
-Produces: `tradeoff_scatter.png`, `radar_chart.png`, `adapter_sizes.png`,
-`loss_curves.png`, `ocr_comparison.png`, `ocr_by_length_heatmap.png`.
 
 ---
 
-## Running on a SLURM cluster
+## Project Structure
 
-SLURM job scripts are in `jobs/sh_files/`. Example submission:
-
-```bash
-sbatch jobs/sh_files/train_lora_sweep.sh
 ```
-
-Logs are written to `jobs/logs/`.
-
----
-
-## Training configuration
-
-All experiments share the following setup:
-
-- Precision: `bfloat16` mixed precision
-- Optimizer: AdamW (8-bit for full fine-tuning and QLoRA, standard for LoRA)
-- Gradient accumulation: 4 steps (effective batch size of 4)
-- LR schedule: cosine with 10% warmup
-- Frozen components: text encoder and VAE — only the transformer is adapted
-- Text embeddings are pre-computed once before training to avoid redundant T5 forward passes
-- Best checkpoint is selected by validation loss (flow-matching MSE in latent space)
-
-| Script | Target modules | Epochs | Patience |
-|---|---|---|---|
-| `train_full_finetune.py` | All transformer params | 15 | 4 |
-| `train_lora_rank_sweep.py` | to_q, to_k, to_v, to_out.0, ff.net.0.proj, ff.net.2 | 15 | 4 |
-| `train_lora_cross_attention.py` | to_k, to_v | 20 | 5 |
-| `train_qlora.py` | to_k, to_v (4-bit NF4 backbone) | 20 | 5 |
+Efficient_training/
+├── train_*.py               # Training scripts (one per strategy)
+├── evaluate_all.py          # Evaluation pipeline
+├── analyze_ocr_by_length.py
+├── generate_plots.py
+├── src/
+│   ├── evaluation/fid.py
+│   └── monitoring/          # Resource + energy tracking
+└── jobs/sh_files/           # SLURM scripts
+```
 
 ---
 
 ## Dependencies
 
-| Package | Version | Purpose |
-|---|---|---|
-| diffusers (git) | latest | Flux.2 Klein pipeline |
-| torch | ≥ 2.0 | Training |
-| peft | ≥ 0.8 | LoRA / QLoRA |
-| bitsandbytes | ≥ 0.41 | 4-bit quantization + 8-bit AdamW |
-| transformers | ≥ 4.38 | Text encoder, scheduler |
-| easyocr | latest | OCR evaluation |
-| codecarbon | ≥ 2.3 | Energy tracking |
-| scipy | latest | FID computation |
+```
+diffusers (git)   — Flux.2 Klein pipeline
+torch ≥ 2.0       — Training
+peft ≥ 0.8        — LoRA / QLoRA
+bitsandbytes      — 4-bit quantization
+easyocr           — OCR evaluation
+codecarbon        — Energy tracking
+```

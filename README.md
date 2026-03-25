@@ -16,8 +16,9 @@ This repository is divided into three main modules, each contained within its re
 
 ## 1. Dataset Creation (`Dataset_creation/`)
 
-![Dataset Creation Pipeline](./Dataset_creation/figures/dataset_pipeline.jpg)
-
+<div align="center">
+  <img src="./Dataset_creation/figures/dataset_pipeline.jpg" alt="Dataset Creation Pipeline" width="500" />
+</div>
 This module houses our automated pipeline for building text-in-image datasets suitable for training text-to-image generative models (e.g., Stable Diffusion, ControlNet, FLUX). 
 
 It streams images from HuggingFace's **AnyWord-3M** and applies a rigorous multi-step filtering and captioning process:
@@ -34,8 +35,9 @@ It streams images from HuggingFace's **AnyWord-3M** and applies a rigorous multi
 ### Dataset Examples
 *Below are examples of the dataset outputs after passing through the filtering and captioning pipeline:*
 
-![Dataset Samples](./Dataset_creation/figures/dataset_sample.jpg)
-
+<div align="center">
+  <img src="./Dataset_creation/figures/dataset_sample.jpg" alt="Dataset Samples" width="600" />
+</div>
 > **Hardware Note:** BLIP-2 (`Salesforce/blip2-flan-t5-xl`) requires ~16 GB VRAM. The script auto-falls back to a lighter model if memory is insufficient. See the folder's README for detailed usage and threshold configurations.
 
 ---
@@ -45,7 +47,7 @@ It streams images from HuggingFace's **AnyWord-3M** and applies a rigorous multi
 This directory contains the necessary project structure, dependencies, and configurations to efficiently fine-tune the **FLUX.2 Klein 4B** model using the datasets generated in the previous step.
 
 <p align="center">
-  <img src="./Efficient_Training/figures/lora_architecture.png" alt="LoRA architecture variants">
+  <img src="./Efficient_Training/figures/lora_architecture.png" alt="LoRA architecture variants" width="720" >
   <br>
   <em>LoRA architecture variants. Left (LoRA rank sweep): adapters applied to 6 modules spanning attention and feed-forward blocks. Right (CA-LoRA / QLoRA): adapters restricted to the 2 cross-attention key/value projections; the backbone is additionally quantized to 4-bit NF4 for QLoRA.</em>
 </p>
