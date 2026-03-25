@@ -1,5 +1,20 @@
 # Projet-IA-Efficient-Image-Generation
 
+*This repository contains the work for **Project 12: Efficient Image Generation**, developed as part of the ENSTA course: [CSC_5IA21](https://giannifranchi.github.io/CSC_5IA21.html)*
+
+### Team Members
+* Adam Gassem
+* Asma Walha
+* Achraf Chaouch
+* Takoua Ben Aissa
+* Amaury Lorin
+
+### Tutors
+* Arturo Mendoza Quispe
+* Nacim Belkhir
+
+---
+
 Welcome to the **Projet-IA-Efficient-Image-Generation** repository. This project provides a complete, end-to-end pipeline designed for creating high-quality OCR datasets, efficiently fine-tuning the FLUX.2 Klein 4B model, and running resource-constrained inference and benchmarking.
 
 This repository is divided into three main modules, each contained within its respective folder.
@@ -47,7 +62,7 @@ It streams images from HuggingFace's **AnyWord-3M** and applies a rigorous multi
 This directory contains the necessary project structure, dependencies, and configurations to efficiently fine-tune the **FLUX.2 Klein 4B** model using the datasets generated in the previous step.
 
 <p align="center">
-  <img src="./Efficient_Training/figures/lora_architecture.png" alt="LoRA architecture variants" width="720" >
+  <img src="./Efficient_Training/figures/lora_architecture.jpg" alt="LoRA architecture variants" width="720" >
   <br>
   <em>LoRA architecture variants. Left (LoRA rank sweep): adapters applied to 6 modules spanning attention and feed-forward blocks. Right (CA-LoRA / QLoRA): adapters restricted to the 2 cross-attention key/value projections; the backbone is additionally quantized to 4-bit NF4 for QLoRA.</em>
 </p>
