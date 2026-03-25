@@ -15,10 +15,9 @@
 
 ---
 
-Welcome to the **Projet-IA-Efficient-Image-Generation** repository. This project provides a complete, end-to-end pipeline designed for creating high-quality OCR datasets, efficiently fine-tuning the FLUX.2 Klein 4B model, and running resource-constrained inference and benchmarking.
+Welcome to the **Efficient Image Generation** project codebase. This project tackles the hardware and VRAM bottlenecks of modern Latent Diffusion Models by providing a "frugal" end-to-end pipeline for FLUX.2, using text rendering as our primary benchmark for precision.
 
-This repository is divided into three main modules, each contained within its respective folder.
-
+The repository provides a complete toolkit to generate synthetic OCR datasets, perform efficient fine-tuning (LoRA vs. Full-parameter), and evaluate the hardware footprint of various quantization and distillation techniques. To bridge the gap for consumer-grade GPUs, we implement and benchmark different offloading strategies, featuring our own Smart Offloading algorithm compared directly against industry standards like **ComfyUI**.
 ---
 
 ## Repository Structure
