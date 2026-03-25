@@ -17,7 +17,7 @@ We tested four strategies on the **Flux.2 Klein 4B** model:
 
 We specifically focused on **cross-attention layers** — the part of the model that "reads" the text prompt and decides how to render it in the image. Our hypothesis: if text rendering fails, it's because the model isn't paying attention to the right parts of the prompt.
 
-![LoRA architecture variants](figures/lora_architecture.png)
+![LoRA architecture variants](results/plots/lora_architecture.png)
 
 ---
 
@@ -37,7 +37,7 @@ Only ~5% of candidate images passed all filters — ensuring high quality over q
 
 **CA-LoRA with rank 16 is the best model** — not the most powerful one, but the most targeted one.
 
-![OCR comparison per experiment](figures/ocr_comparison.png)
+![OCR comparison per experiment](results/plots/ocr_comparison.png)
 
 With only **4 MB of adapter weights** (versus 15 GB for full fine-tuning), CA-LoRA r=16 achieves:
 - The best **Exact Match** score: 0.30 (+20% vs full fine-tuning)
@@ -49,7 +49,7 @@ With only **4 MB of adapter weights** (versus 15 GB for full fine-tuning), CA-Lo
 
 ## The Storage Cost: 4000× Smaller
 
-![Adapter sizes](figures/adapter_sizes.png)
+![Adapter sizes](results/plots/adapter_sizes.png)
 
 All LoRA adapters fit between 4 and 30 MB. The full fine-tune checkpoint weighs **15 GB**. This means you can share, store, and swap fine-tuned behaviors for almost no cost.
 
@@ -57,7 +57,7 @@ All LoRA adapters fit between 4 and 30 MB. The full fine-tune checkpoint weighs 
 
 ## Where It Still Struggles
 
-![OCR performance by text length](figures/ocr_by_length_heatmap.png)
+![OCR performance by text length](results/plots/ocr_by_length_heatmap.png)
 
 All models — including ours — collapse on **3+ word targets**. Exact match drops to near zero when the text is longer than two words. This is the main open challenge: models can render individual words but fail to maintain consistency across a full phrase.
 
