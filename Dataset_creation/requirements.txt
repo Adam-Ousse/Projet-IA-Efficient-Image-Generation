@@ -1,0 +1,27 @@
+# ─── Core ML / Deep Learning ──────────────────────────────────────────────────
+torch>=2.0.0
+torchvision>=0.15.0
+
+# ─── HuggingFace stack ────────────────────────────────────────────────────────
+transformers>=4.30.0        # BLIP-2 requires >= 4.30.0
+datasets>=2.14.0            # AnyWord-3M streaming support
+huggingface-hub>=0.19.0
+accelerate>=0.20.0          # optional but recommended for BLIP-2 loading
+
+# ─── OCR ──────────────────────────────────────────────────────────────────────
+easyocr>=1.7.0
+
+# ─── Image processing ─────────────────────────────────────────────────────────
+Pillow>=9.0.0
+opencv-python-headless>=4.7.0   # headless variant — no display needed on cluster
+numpy>=1.24.0
+
+# ─── Text utilities ───────────────────────────────────────────────────────────
+python-Levenshtein>=0.21.0   # improves OCR coverage scoring (optional but recommended)
+langdetect>=1.0.9            # language detection for annotation filtering (optional)
+
+# ─── Progress / CLI ───────────────────────────────────────────────────────────
+tqdm>=4.65.0
+
+# ─── Packaging (used for version comparison in the .sh script) ────────────────
+packaging>=23.0
