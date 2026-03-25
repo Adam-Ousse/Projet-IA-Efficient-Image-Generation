@@ -57,6 +57,18 @@ This directory contains the necessary project structure, dependencies, and confi
 * **Dependency Management**: Streamlined installation steps to ensure correct library versions for distributed training.
 * **Project Structure**: Organized directories for checkpoints, logs, and customized training scripts.
 
+### Fine-Tuning Results
+
+<details>
+<summary><strong> Click to view LoRA Rank and Method Comparison</strong></summary>
+
+<br>
+This grid compares the text-rendering and overall visual quality across different fine-tuning approaches, demonstrating the effects of Full Fine-Tuning (FT) versus various LoRA ranks ($r$), Cross-Attention LoRA (CA-LoRA), and QLoRA:
+
+![LoRA Fine-Tuning Results](./Efficient_Training/figures/LoRA_results.jpg)
+
+</details>
+
 *Please refer to the `README.md` inside the `Efficient training/` folder for specific installation commands and training launch instructions.*
 
 ---
@@ -87,7 +99,7 @@ This grid provides a qualitative comparison of generation outputs across differe
 </details>
 
 <details>
-<summary><strong>👉 Click to view Model Distillation Comparison (dev vs 9B vs 4B)</strong></summary>
+<summary><strong> Click to view Model Distillation Comparison (dev vs 9B vs 4B)</strong></summary>
 
 <br>
 This grid compares the visual and text-rendering quality across different FLUX.2 model sizes at FP16 precision:
@@ -97,7 +109,7 @@ This grid compares the visual and text-rendering quality across different FLUX.2
 </details>
 
 <details>
-<summary><strong>👉 Click to view Quantization Matrix Comparison</strong></summary>
+<summary><strong> Click to view Quantization Matrix Comparison</strong></summary>
 
 <br>
 This matrix illustrates the visual impact of applying varying levels of quantization to both the Text Encoder (Y-axis) and the FLUX model backbone (X-axis):
